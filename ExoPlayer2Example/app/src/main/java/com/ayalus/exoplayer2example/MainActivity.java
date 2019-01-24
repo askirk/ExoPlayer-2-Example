@@ -3,6 +3,7 @@ package com.ayalus.exoplayer2example;
 import android.net.Uri;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
+import android.util.JsonReader;
 import android.util.Log;
 import android.view.Surface;
 import android.widget.TextView;
@@ -18,7 +19,9 @@ import com.google.android.exoplayer2.decoder.DecoderCounters;
 import com.google.android.exoplayer2.source.LoopingMediaSource;
 import com.google.android.exoplayer2.source.MediaSource;
 import com.google.android.exoplayer2.source.TrackGroupArray;
+import com.google.android.exoplayer2.source.hls.HlsManifest;
 import com.google.android.exoplayer2.source.hls.HlsMediaSource;
+import com.google.android.exoplayer2.source.hls.playlist.HlsMediaPlaylist;
 import com.google.android.exoplayer2.trackselection.AdaptiveTrackSelection;
 import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
 import com.google.android.exoplayer2.trackselection.TrackSelection;
@@ -31,6 +34,11 @@ import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
 import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory;
 import com.google.android.exoplayer2.util.Util;
 import com.google.android.exoplayer2.video.VideoRendererEventListener;
+
+import org.json.JSONObject;
+import org.json.JSONStringer;
+
+import java.util.List;
 
 
 
@@ -70,7 +78,7 @@ public class MainActivity extends AppCompatActivity implements VideoRendererEven
 ////        Uri mp4VideoUri =Uri.parse("http://81.7.13.162/hls/ss1/index.m3u8"); //random 720p source
 ////        Uri mp4VideoUri =Uri.parse("http://54.255.155.24:1935//Live/_definst_/amlst:sweetbcha1novD235L240P/playlist.m3u8"); //Radnom 540p indian channel
 //        Uri mp4VideoUri =Uri.parse("http://cbsnewshd-lh.akamaihd.net/i/CBSNHD_7@199302/index_700_av-p.m3u8"); //CNBC
-        Uri mp4VideoUri =Uri.parse("http://live.field59.com/wwsb/ngrp:wwsb1_all/playlist.m3u8"); //ABC NEWS
+        Uri mp4VideoUri =Uri.parse("http://10.1.224.115:3000/m/master/playlist.m3u8"); //ABC NEWS
 ////        Uri mp4VideoUri =Uri.parse("FIND A WORKING LINK ABD PLUg INTO HERE"); //PLUG INTO HERE<------------------------------------------
 //
 //
@@ -116,8 +124,8 @@ public class MainActivity extends AppCompatActivity implements VideoRendererEven
         //        MediaSource videoSource = new ExtractorMediaSource(mp4VideoUri, dataSourceFactory, extractorsFactory, null, null);
 
         //FOR LIVESTREAM LINK:
-        MediaSource videoSource = new HlsMediaSource(mp4VideoUri, dataSourceFactory, 1, null, null);
-        final LoopingMediaSource loopingSource = new LoopingMediaSource(videoSource);
+        final MediaSource videoSource = new HlsMediaSource.Factory(dataSourceFactory)
+                .createMediaSource(mp4VideoUri);
         // Prepare the player with the source.
         player.prepare(videoSource);
 
@@ -136,12 +144,24 @@ public class MainActivity extends AppCompatActivity implements VideoRendererEven
 
             @Override
             public void onLoadingChanged(boolean isLoading) {
-
+                Log.v(TAG, "onLoadingChanged - isLoading - " + isLoading);
             }
 
             @Override
             public void onPlayerStateChanged(boolean playWhenReady, int playbackState) {
                 Log.v(TAG, "Listener-onPlayerStateChanged..." + playbackState+"|||isDrawingCacheEnabled():"+simpleExoPlayerView.isDrawingCacheEnabled());
+                if(player.getCurrentManifest() != null){
+                    HlsMediaPlaylist playlist = ((HlsManifest) player.getCurrentManifest()).mediaPlaylist;
+                    Log.v(TAG, "media seq: " + playlist.mediaSequence);
+                    Log.v(TAG, "discont seq: " + playlist.discontinuitySequence);
+                    List<HlsMediaPlaylist.Segment> segments = ((HlsManifest) player.getCurrentManifest()).mediaPlaylist.segments;
+                    for(HlsMediaPlaylist.Segment s : segments){
+                        Log.v(TAG, s.toString());
+                        Log.v(TAG, "relative start:" + s.relativeStartTimeUs);
+                        Log.v(TAG, "duration:" + s.durationUs);
+                        Log.v(TAG, s.url);
+                    }
+                }
             }
 
             @Override
@@ -157,8 +177,21 @@ public class MainActivity extends AppCompatActivity implements VideoRendererEven
             @Override
             public void onPlayerError(ExoPlaybackException error) {
                 Log.v(TAG, "Listener-onPlayerError...");
+                switch (error.type) {
+                    case ExoPlaybackException.TYPE_SOURCE:
+                        Log.e(TAG, "TYPE_SOURCE: " + error.getSourceException().getMessage());
+                        break;
+
+                    case ExoPlaybackException.TYPE_RENDERER:
+                        Log.e(TAG, "TYPE_RENDERER: " + error.getRendererException().getMessage());
+                        break;
+
+                    case ExoPlaybackException.TYPE_UNEXPECTED:
+                        Log.e(TAG, "TYPE_UNEXPECTED: " + error.getUnexpectedException().getMessage());
+                        break;
+                }
                 player.stop();
-                player.prepare(loopingSource);
+                player.prepare(videoSource);
                 player.setPlayWhenReady(true);
             }
 
